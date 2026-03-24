@@ -62,6 +62,6 @@ def run_ingestion(db:Session,embedding_survice,vector_db):
             db.commit()
         except Exception as e:
             db.rollback()
-            logging.debug(f"Video Url : {e}")
+            logging.debug(f"Video error : {e}")
         finally:
             cleanup(path)

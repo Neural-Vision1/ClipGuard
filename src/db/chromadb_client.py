@@ -7,7 +7,8 @@ class VectorDB:
             path="./chroma_db",
             settings=Settings(allow_reset=True)
         )
-        self.collections = self.client.get_or_create_collection("video_embeddings")
+        self.collection_name = "video_embeddings"
+        self.collections = self.client.get_or_create_collection(self.collection_name)
 
     def add_embeddings(self, embeddings, metadata_list):
         try:
@@ -18,7 +19,6 @@ class VectorDB:
                 embeddings=embeddings,
                 metadatas=metadata_list
             )
-            self.client.persist()
         except Exception as e:
             logging.debug(f"VectorDB : {e}")
     def search(self, embedding, top_k=5):
@@ -43,6 +43,7 @@ class VectorDB:
         return formatted
 
     def clear_collection(self):
-        self.client.reset()
+        self.client.delete_collection(self.collection_name)
+        self.collections = self.client.create_collection(self.collection_name)
 
 

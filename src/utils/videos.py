@@ -1,9 +1,9 @@
 import cv2
 
-def extract_frames(video_path: str, fps=1):
+def extract_frames(video_path: str, interval=1):
     extracted_frames = []
     video = cv2.VideoCapture(video_path)
-    fps_interval = int(video.get(cv2.CAP_PROP_FPS)) // fps
+    fps_interval = int(video.get(cv2.CAP_PROP_FPS)) * interval
     frame_count = 0
     while True:
         ret, frame = video.read()

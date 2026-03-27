@@ -1,5 +1,7 @@
 import os
 from queue import Queue
+import glob
+import uuid
 
 from sqlalchemy.orm import Session
 from fastapi import FastAPI,UploadFile,Depends,File, WebSocket, WebSocketDisconnect
@@ -13,6 +15,7 @@ from src.services.imagekit_instance import list_all_files
 from src.services.query import query_video
 from src.db.database import Base,engine
 from src.utils.file_handeling import save_temp,cleanup
+from src.utils.videos import extract_frames
 from src.utils.logger import logging
 from src.core.session_maker import create_session,delete_session,get_active_sessions,stop_session
 from src.workers.stream_worker import start_stream_worker
@@ -82,6 +85,52 @@ def cleanup_dbs(db:Session=Depends(get_db)):
     db.query(Video).delete(synchronize_session=False)
     db.commit()
     return {"status":"cleaned up"}
+
+@app.post("/local-sync-ingest")
+def local_sync_ingest(dir_location:str=r"D:\Programming\Python\Projects\VideoDect\TestData",db:Session=Depends(get_db)):
+    new_added = 0
+    dir_path = dir_location + r"\*.mp4"
+    file_paths = glob.glob(dir_path,recursive=True)
+    for path in file_paths:
+        exists = db.query(Video).filter(Video.url==path).first()
+        if exists and exists.ingested:
+            continue
+        elif not exists:
+            video_id = str(uuid.uuid4())
+            new_video = Video(
+                id=video_id,
+                url=path,
+                ingested = False
+            )
+            db.add(new_video)
+            db.commit()
+            new_added +=1
+        else:
+            video_id =exists.id
+            new_added +=1
+        metadatas = []
+        
+        frames = extract_frames(path)
+        for i in range(len(frames)):
+            metadatas.append({
+                "video_id":video_id,
+                "timestamp":i
+            })
+        embeddings = context.embedding_service.embed_frames(frames)
+        context.vector_db.add_embeddings(embeddings,metadatas)
+        ingested_video = db.query(Video).filter(Video.id==video_id).first()
+        ingested_video.ingested = True
+        db.commit()
+        db.refresh(ingested_video)
+    return {
+        "status": "successful",
+        "total_recieved":len(file_paths),
+        "new_added": new_added,
+        
+    }
+
+        
+        
 
 
 

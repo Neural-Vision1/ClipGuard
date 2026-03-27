@@ -5,16 +5,14 @@ from sqlalchemy.orm import Session
 from ..utils.videos import extract_frames
 from ..utils.logger import logging
 from ..utils.file_handeling import download,cleanup
-from .embedding import EmbeddingService
-from ..db.chromadb_client import VectorDB
 from ..db.models import Video
+from ..services.context_manager import ContextManager
 
-
-def process_video(video_path:str,video_id:str,embedding_service:EmbeddingService,vector_db:VectorDB):
+def process_video(video_path:str,video_id:str,context:ContextManager):
     logging.debug("Processing Video")
     frames = extract_frames(video_path=video_path)
     logging.debug(f"Framed Video : {len(frames)}")
-    embedded_vector = embedding_service.embed_frames(frames)
+    embedded_vector = context.embedding_service.embed_frames(frames)
     logging.debug(f"Embedded : {len(embedded_vector)} | {embedded_vector[0].shape}")
     metadata = []
     for i,_ in enumerate(embedded_vector):
@@ -23,7 +21,7 @@ def process_video(video_path:str,video_id:str,embedding_service:EmbeddingService
             "timestamp":i
         })
     logging.debug(f"To be insertd into vector db")
-    vector_db.add_embeddings(embedded_vector,metadata)
+    context.vector_db.add_embeddings(embedded_vector,metadata)
     logging.debug(f"Inserted to chroma  ")
 
 def upsert_video(file,db:Session):
@@ -49,14 +47,14 @@ def sync_imagekit_files(db,files):
             new_videos.append(video)
     return new_videos
 
-def run_ingestion(db:Session,embedding_survice,vector_db):
+def run_ingestion(db:Session,context):
     videos = db.query(Video).filter(Video.ingested == False).all()
     logging.debug(f"Total Videos found : {len(videos)}")
     for video in videos:
         logging.debug(f"Video Url : {video.url}")
         path = download(video.url)
         try:
-            process_video(path,video.id,embedding_survice,vector_db)
+            process_video(path,video.id,context)
             video.ingested = True
             video.ingested_at = datetime.utcnow()
             db.commit()

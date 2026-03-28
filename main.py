@@ -6,6 +6,8 @@ import uuid
 from sqlalchemy.orm import Session
 from fastapi import FastAPI,UploadFile,Depends,File, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import HTTPException
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 
 from src.db.models import Video
@@ -29,6 +31,19 @@ app = FastAPI()
 Base.metadata.create_all(bind = engine)
 context=ContextManager()
 match_queue = asyncio.Queue()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"]
+)
 
 @app.post("/query")
 async def load_from_imagekit(threshold_count:int,threshold_score:float,file:UploadFile=File(...),db = Depends(get_db)):
@@ -158,12 +173,12 @@ def stop_stream(session_id:str):
         "session_id":session_id if session else None
         }
 
-@app.websocket("ws/{session_id}")
+@app.websocket("/ws/{session_id}")
 async def ws_route(ws:WebSocket,session_id:str):
     await context.manager.connect(session_id,ws)
     try:
         while True:
-            await ws.receive_text()
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         context.manager.active.pop(session_id,None)
 
@@ -175,7 +190,7 @@ async def dispatch_events():
     while True:
         event = await match_queue.get()
         logging.debug(f"Found : {event}")
-        await context.manager.send(event["session_id"],event["match"])
+        await context.manager.send(event["session_id"],event)
 
 #temp
 @app.get("/show-sessions")

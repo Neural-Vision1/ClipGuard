@@ -10,5 +10,5 @@ class ConnectionManager:
     async def send(self,session_id:str,data:dict):
         ws = self.active.get(session_id,None)
         if ws:
-            ws.send_json(data)
+            await ws.send_json(data)
 

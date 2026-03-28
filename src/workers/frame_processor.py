@@ -4,8 +4,8 @@ from ..services.context_manager import ContextManager
 from ..core.aggrigator import Aggregator
 from sqlalchemy.orm import Session
 
-def frame_processor(queue,match_queue:asyncio.Queue,context:ContextManager,session_id,stop_event,db:Session):
-    aggregator = Aggregator()
+def frame_processor(threshold:dict,queue,match_queue:asyncio.Queue,context:ContextManager,session_id,stop_event,db:Session):
+    aggregator = Aggregator(threshold)
     while not stop_event.is_set():
         try:
             frame = queue.get(timeout=1)

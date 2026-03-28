@@ -110,7 +110,7 @@ def local_sync_ingest(dir_location:str=r"D:\Programming\Python\Projects\VideoDec
             new_added +=1
         metadatas = []
         
-        frames = extract_frames(path)
+        frames = extract_frames(path,3)
         for i in range(len(frames)):
             metadatas.append({
                 "video_id":video_id,
@@ -140,7 +140,11 @@ def local_sync_ingest(dir_location:str=r"D:\Programming\Python\Projects\VideoDec
 async def start_stream(request:StartStreamRequestSchema,db:Session=Depends(get_db)):
     session = create_session()
     session["queue"] = Queue(maxsize=20)
-    await start_stream_worker(request.url,match_queue,request.interval,context,session,db)
+    threshold = {
+        "count":request.count,
+        "score":request.score
+    }
+    await start_stream_worker(request.url,threshold,match_queue,request.interval,context,session,db)
     return {
         "status":"session started",
         "session_id":session["id"]

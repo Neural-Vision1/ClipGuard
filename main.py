@@ -9,6 +9,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+import threading
 
 from src.db.models import Video
 from src.services.ingestion import sync_imagekit_files,run_ingestion
@@ -22,7 +23,9 @@ from src.utils.logger import logging
 from src.core.session_maker import create_session,delete_session,get_active_sessions,stop_session
 from src.workers.stream_worker import start_stream_worker
 from src.services.context_manager import ContextManager
-
+from src.core.live_memory import LiveMemoryIndex
+from src.workers.upload_worker import check_uploaded_video
+from src.watcher.folder_watcher import start_watcher
 from api.model import StartStreamRequestSchema
 
 
@@ -152,16 +155,19 @@ def local_sync_ingest(dir_location:str=r"D:\Programming\Python\Projects\VideoDec
 # Stream Manager
 
 @app.post("/start_stream")
-async def start_stream(request:StartStreamRequestSchema,db:Session=Depends(get_db)):
+async def start_stream(request:StartStreamRequestSchema):
     session = create_session()
-    session["queue"] = Queue(maxsize=20)
-    threshold = {
-        "count":request.count,
-        "score":request.score
-    }
-    await start_stream_worker(request.url,threshold,match_queue,request.interval,context,session,db)
+    live_memory = LiveMemoryIndex()
+    session["live_memory"] = live_memory
+    session["url"] = request.url
+    worker = threading.Thread(
+        target=start_stream_worker,
+        args=(request.url,request.interval,context,live_memory)
+    )
+    worker.start()
+    session["thread"] = worker
     return {
-        "status":"session started",
+        "status":"successful",
         "session_id":session["id"]
     }
 
@@ -169,7 +175,7 @@ async def start_stream(request:StartStreamRequestSchema,db:Session=Depends(get_d
 def stop_stream(session_id:str):
     session = stop_session(session_id=session_id)
     return {
-        "status":"session stopped",
+        "status":"successful",
         "session_id":session_id if session else None
         }
 
@@ -184,13 +190,21 @@ async def ws_route(ws:WebSocket,session_id:str):
 
 @app.on_event("startup")
 async def event_dispatcher():
-    asyncio.create_task(dispatch_events())   
+    watcher = threading.Thread(
+        target=start_watcher,
+        args=(context.embedding_service,match_queue)
+    )
+    watcher.start()
+    asyncio.create_task(dispatch_events())  
+    
 
 async def dispatch_events():
     while True:
-        event = await match_queue.get()
-        logging.debug(f"Found : {event}")
-        await context.manager.send(event["session_id"],event)
+        if not match_queue.empty():
+            event = await match_queue.get()
+            await context.manager.send(event["stream_id"],event)
+        await asyncio.sleep(0.1)
+    
 
 #temp
 @app.get("/show-sessions")

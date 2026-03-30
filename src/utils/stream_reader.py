@@ -39,3 +39,20 @@ def stream_frame(video_url,interval):
             gray_scaled = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
             last_time = current_time
             yield gray_scaled
+
+
+def live_video_reader(video_path: str, interval=5):
+    video = cv2.VideoCapture(video_path)
+    fps_interval = int(video.get(cv2.CAP_PROP_FPS)) * interval
+    frame_count = 0
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            break
+
+        if frame_count % fps_interval == 0:
+            gray_scaled = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            yield gray_scaled
+        frame_count += 1
+    video.release()
+    cv2.destroyAllWindows()

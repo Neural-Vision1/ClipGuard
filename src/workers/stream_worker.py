@@ -1,23 +1,12 @@
-from .frame_processor import frame_processor
-from .frame_producer import frame_producer
-import threading
+from ..utils.stream_reader import stream_frame
+from ..services.context_manager import ContextManager
+from ..core.live_memory import LiveMemoryIndex
 
-
-
-async def start_stream_worker(video_url,threshold,match_queue,interval,context,session,db):
-    queue = session["queue"]
-    stop_event = session["stop_event"]
-    session_id = session["id"]
-    chunker = threading.Thread(
-        target=frame_producer,
-        args=(video_url,interval,queue,stop_event),
-        daemon=True
-    )
-    processor = threading.Thread(
-        target=frame_processor,
-        args=(threshold,queue,match_queue,context,session_id,stop_event,db),
-        daemon=True
-    )
-    chunker.start()
-    processor.start()
-    session["threads"].extend([chunker,processor])
+def start_stream_worker(video_url,interval,context:ContextManager,live_memory:LiveMemoryIndex):
+    frame_no = 0
+    frames = stream_frame(video_url,interval)
+    for frame in frames:
+        embedding = context.embedding_service.embed_frame(frame)
+        frame_no+=1
+        live_memory.add_embeddings(embedding,frame_no)
+    

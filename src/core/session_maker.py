@@ -5,10 +5,10 @@ active_session = {}
 def create_session():
     session_id = str(uuid.uuid4())
     active_session[session_id] = {
-        "threads":[],
-        "queue":None,
-        "match_queue":None,
+        "thread":None,
+        "live_memory":None,
         "id":session_id,
+        "url":None,
         "stop_event":Event()
     }
     return active_session[session_id]
@@ -29,3 +29,7 @@ def delete_session(session_id:str):
 
 def get_active_sessions():
     return [k for k in active_session.keys()]
+
+
+def get_all_live_streams():
+    return [(sid,data["live_memory"]) for sid,data in active_session.items()]
